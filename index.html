@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Weekly Task Planner</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-title">
+      <p class="eyebrow">Планирование недели</p>
+      <h1>Weekly Task Planner</h1>
+    </div>
+
+    <nav class="week-controls" aria-label="Навигация по неделям">
+      <button class="control-button" type="button" id="prevWeek">Назад</button>
+      <button class="control-button is-primary" type="button" id="todayButton">Сегодня</button>
+      <button class="control-button" type="button" id="nextWeek">Вперед</button>
+      <p class="week-range" id="weekRange" aria-live="polite">Неделя загружается</p>
+    </nav>
+  </header>
+
+  <section class="week-panel" id="weekPanel" aria-label="Дни выбранной недели"></section>
+
+  <main class="workspace">
+    <div class="workspace-header">
+      <p class="eyebrow">Выбранный день</p>
+      <h2 id="selectedDayTitle">Сегодня</h2>
+    </div>
+
+    <form class="task-form" id="taskForm">
+      <label class="visually-hidden" for="taskInput">Новая задача</label>
+      <input id="taskInput" name="task" type="text" placeholder="Добавить задачу на день" autocomplete="off">
+      <button class="add-button" type="submit">Добавить</button>
+    </form>
+
+    <section class="tasks-list" id="tasksList" aria-label="Список задач">
+      <p class="empty-state">Здесь появятся задачи выбранного дня.</p>
+    </section>
+  </main>
+</body>
+</html>
