@@ -14,31 +14,74 @@
       <h1>Weekly Task Planner</h1>
     </div>
 
+    <nav class="view-switcher" aria-label="Переключение разделов">
+      <button class="view-button" type="button" data-view="month" aria-pressed="false">Месяц</button>
+      <button class="view-button is-active" type="button" data-view="week" aria-pressed="true">Неделя</button>
+      <button class="view-button" type="button" data-view="tasks" aria-pressed="false">Задачи</button>
+    </nav>
+
     <nav class="week-controls" aria-label="Навигация по неделям">
-      <button class="control-button" type="button" id="prevWeek">Назад</button>
-      <button class="control-button is-primary" type="button" id="todayButton">Сегодня</button>
-      <button class="control-button" type="button" id="nextWeek">Вперед</button>
       <p class="week-range" id="weekRange" aria-live="polite">Неделя загружается</p>
+      <div class="week-buttons">
+        <button class="control-button" type="button" id="prevWeek">Назад</button>
+        <button class="control-button is-primary" type="button" id="todayButton">Сегодня</button>
+        <button class="control-button" type="button" id="nextWeek">Вперед</button>
+      </div>
     </nav>
   </header>
 
-  <section class="week-panel" id="weekPanel" aria-label="Дни выбранной недели"></section>
+  <div class="app-view" id="weekView" data-view-panel="week">
+    <section class="week-panel" id="weekPanel" aria-label="Дни выбранной недели"></section>
 
-  <main class="workspace">
-    <div class="workspace-header">
-      <p class="eyebrow">Выбранный день</p>
-      <h2 id="selectedDayTitle">Сегодня</h2>
+    <main class="workspace">
+      <div class="workspace-header">
+        <p class="eyebrow">Выбранный день</p>
+        <h2 id="selectedDayTitle">Сегодня</h2>
+      </div>
+
+      <form class="task-form" id="taskForm">
+        <label class="visually-hidden" for="taskInput">Новая задача</label>
+        <input id="taskInput" name="task" type="text" placeholder="Добавить задачу на день" autocomplete="off">
+        <button class="add-button" type="submit">Добавить</button>
+      </form>
+
+      <section class="tasks-list" id="tasksList" aria-label="Список задач">
+        <p class="empty-state">Здесь появятся задачи выбранного дня.</p>
+      </section>
+    </main>
+  </div>
+
+  <section class="app-view month-view" id="monthView" data-view-panel="month" hidden>
+    <div class="month-view-header">
+      <div>
+        <p class="eyebrow">Экран месяца</p>
+        <h2 id="monthViewTitle">Месяц</h2>
+      </div>
+
+      <nav class="month-controls" aria-label="Навигация по месяцам">
+        <button class="month-nav-button" type="button" id="prevMonthButton" aria-label="Предыдущий месяц">←</button>
+        <button class="month-today-button" type="button" id="monthTodayButton">Сегодня</button>
+        <button class="month-nav-button" type="button" id="nextMonthButton" aria-label="Следующий месяц">→</button>
+      </nav>
     </div>
 
-    <form class="task-form" id="taskForm">
-      <label class="visually-hidden" for="taskInput">Новая задача</label>
-      <input id="taskInput" name="task" type="text" placeholder="Добавить задачу на день" autocomplete="off">
-      <button class="add-button" type="submit">Добавить</button>
-    </form>
+    <div class="month-weekdays" aria-label="Дни недели">
+      <span>Пн</span>
+      <span>Вт</span>
+      <span>Ср</span>
+      <span>Чт</span>
+      <span>Пт</span>
+      <span>Сб</span>
+      <span>Вс</span>
+    </div>
 
-    <section class="tasks-list" id="tasksList" aria-label="Список задач">
-      <p class="empty-state">Здесь появятся задачи выбранного дня.</p>
-    </section>
-  </main>
+    <div class="month-grid" id="monthGrid" aria-label="Календарная сетка месяца"></div>
+  </section>
+
+  <section class="app-view view-placeholder" id="tasksView" data-view-panel="tasks" hidden>
+    <p class="eyebrow">Экран задач</p>
+    <h2>Задачи</h2>
+    <p>Здесь появится общий список задач.</p>
+  </section>
 </body>
 </html>

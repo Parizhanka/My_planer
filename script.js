@@ -3,8 +3,10 @@ const DAY_NAMES = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
 const state = {
   tasks: [],
+  activeView: "week",
   selectedDate: "",
   visibleWeekStart: "",
+  visibleMonthDate: "",
   draggedTaskId: ""
 };
 
@@ -30,12 +32,74 @@ function parseDateId(dateId) {
   return new Date(year, month - 1, day);
 }
 
+function isValidDateId(dateId) {
+  if (typeof dateId !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(dateId)) {
+    return false;
+  }
+
+  const date = parseDateId(dateId);
+  return toDateId(date) === dateId;
+}
+
 function addDays(date, days) {
   const result = new Date(date);
   result.setDate(result.getDate() + days);
   result.setHours(0, 0, 0, 0);
 
   return result;
+}
+
+function addMonths(date, months) {
+  const result = new Date(date.getFullYear(), date.getMonth() + months, 1);
+  result.setHours(0, 0, 0, 0);
+
+  return result;
+}
+
+function toMonthStartId(date) {
+  return toDateId(getStartOfMonth(date));
+}
+
+function getStartOfMonth(date) {
+  const result = new Date(date.getFullYear(), date.getMonth(), 1);
+  result.setHours(0, 0, 0, 0);
+
+  return result;
+}
+
+function getEndOfMonth(date) {
+  const result = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+  result.setHours(0, 0, 0, 0);
+
+  return result;
+}
+
+function getMonthGridDays(date) {
+  const monthStart = getStartOfMonth(date);
+  const monthEnd = getEndOfMonth(date);
+  const gridStart = getWeekStart(monthStart);
+  const gridEnd = addDays(getWeekStart(monthEnd), 6);
+  const days = [];
+
+  for (let currentDate = new Date(gridStart); currentDate <= gridEnd; currentDate = addDays(currentDate, 1)) {
+    days.push(new Date(currentDate));
+  }
+
+  return days;
+}
+
+function getMonthName(date) {
+  const monthName = formatDate(date, { month: "long" });
+  return `${monthName} ${date.getFullYear()}`;
+}
+
+function isSameMonth(dateA, dateB) {
+  return dateA.getFullYear() === dateB.getFullYear()
+    && dateA.getMonth() === dateB.getMonth();
+}
+
+function isCurrentMonthDay(dateString, visibleMonthDate) {
+  return isSameMonth(parseDateId(dateString), parseDateId(visibleMonthDate));
 }
 
 function getWeekStart(date) {
@@ -129,27 +193,70 @@ function initializeDates() {
   state.visibleWeekStart = toDateId(weekStart);
 }
 
-function getTaskStatsByDate(dateId) {
-  return state.tasks
-    .filter((task) => task.date === dateId)
-    .reduce((stats, task) => {
-      if (task.isCompleted) {
-        stats.completed += 1;
-        return stats;
-      }
+function createEmptyTaskStats() {
+  return {
+    done: 0,
+    inProgress: 0,
+    overdue: 0
+  };
+}
 
-      if (isTaskOverdue(task)) {
-        stats.overdue += 1;
-        return stats;
-      }
+function getTaskStatsMapByDate(tasks = state.tasks) {
+  const statsByDate = new Map();
+  const todayId = toDateId(new Date());
 
-      stats.active += 1;
-      return stats;
-    }, {
-      completed: 0,
-      active: 0,
-      overdue: 0
-    });
+  tasks.forEach((task) => {
+    if (!task || typeof task.date !== "string") {
+      return;
+    }
+
+    if (!statsByDate.has(task.date)) {
+      statsByDate.set(task.date, createEmptyTaskStats());
+    }
+
+    const stats = statsByDate.get(task.date);
+
+    if (task.isCompleted === true) {
+      stats.done += 1;
+      return;
+    }
+
+    if (task.date < todayId) {
+      stats.overdue += 1;
+      return;
+    }
+
+    stats.inProgress += 1;
+  });
+
+  return statsByDate;
+}
+
+function getTaskStatsForDate(dateString, statsByDate = null) {
+  const sourceStats = statsByDate || getTaskStatsMapByDate();
+  const stats = sourceStats.get(dateString);
+
+  if (!stats) {
+    return createEmptyTaskStats();
+  }
+
+  return {
+    done: stats.done,
+    inProgress: stats.inProgress,
+    overdue: stats.overdue
+  };
+}
+
+function getDoneCountForDate(dateString) {
+  return getTaskStatsForDate(dateString).done;
+}
+
+function getInProgressCountForDate(dateString) {
+  return getTaskStatsForDate(dateString).inProgress;
+}
+
+function getOverdueCountForDate(dateString) {
+  return getTaskStatsForDate(dateString).overdue;
 }
 
 function isTaskOverdue(task) {
@@ -196,10 +303,10 @@ function updateSelectedDayTitle() {
   });
 }
 
-function createDayCard(date, index) {
+function createDayCard(date, index, statsByDate) {
   const todayId = toDateId(new Date());
   const dateId = toDateId(date);
-  const taskStats = getTaskStatsByDate(dateId);
+  const taskStats = getTaskStatsForDate(dateId, statsByDate);
   const dayCard = document.createElement("article");
 
   dayCard.className = "day-card";
@@ -233,11 +340,11 @@ function createDayCard(date, index) {
     <span class="day-task-stats" aria-label="Статистика задач">
       <span class="day-task-stat">
         <span>Сделано</span>
-        <strong>${taskStats.completed}</strong>
+        <strong>${taskStats.done}</strong>
       </span>
       <span class="day-task-stat">
         <span>В работе</span>
-        <strong>${taskStats.active}</strong>
+        <strong>${taskStats.inProgress}</strong>
       </span>
       <span class="day-task-stat is-overdue">
         <span>Просрочено</span>
@@ -255,12 +362,13 @@ function renderWeek() {
   const weekStart = parseDateId(state.visibleWeekStart);
   const weekDates = Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
   const weekEnd = weekDates[6];
+  const statsByDate = getTaskStatsMapByDate();
 
   weekRange.textContent = formatWeekRange(weekStart, weekEnd);
   weekPanel.innerHTML = "";
 
   weekDates.forEach((date, index) => {
-    weekPanel.append(createDayCard(date, index));
+    weekPanel.append(createDayCard(date, index, statsByDate));
   });
 
   updateSelectedDayTitle();
@@ -431,8 +539,167 @@ function renderTasks() {
 }
 
 function renderApp() {
+  renderViewSwitcher();
+  renderActiveView();
+  renderMonthView();
   renderWeek();
   renderTasks();
+}
+
+function renderViewSwitcher() {
+  document.querySelectorAll(".view-button").forEach((button) => {
+    const isActive = button.dataset.view === state.activeView;
+
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  });
+}
+
+function renderActiveView() {
+  document.querySelectorAll("[data-view-panel]").forEach((viewPanel) => {
+    viewPanel.hidden = viewPanel.dataset.viewPanel !== state.activeView;
+  });
+}
+
+function ensureVisibleMonthDate() {
+  if (isValidDateId(state.visibleMonthDate)) {
+    state.visibleMonthDate = toMonthStartId(parseDateId(state.visibleMonthDate));
+    return;
+  }
+
+  state.visibleMonthDate = toMonthStartId(new Date());
+}
+
+function syncVisibleMonthWithSelectedDate() {
+  if (isValidDateId(state.selectedDate)) {
+    state.visibleMonthDate = toMonthStartId(parseDateId(state.selectedDate));
+    return;
+  }
+
+  ensureVisibleMonthDate();
+}
+
+function renderMonthView() {
+  if (state.activeView !== "month" && !state.visibleMonthDate) {
+    return;
+  }
+
+  renderMonthHeader();
+  renderMonthGrid();
+}
+
+function renderMonthHeader() {
+  const monthTitle = document.querySelector("#monthViewTitle");
+
+  if (!monthTitle || !state.visibleMonthDate) {
+    return;
+  }
+
+  monthTitle.textContent = getMonthName(parseDateId(state.visibleMonthDate));
+}
+
+function createMonthDayCard(date, cellIndex, statsByDate) {
+  const dateId = toDateId(date);
+  const todayId = toDateId(new Date());
+  const taskStats = getTaskStatsForDate(dateId, statsByDate);
+  const dayCard = document.createElement("article");
+  const isVisibleMonthDay = isCurrentMonthDay(dateId, state.visibleMonthDate);
+
+  dayCard.className = "month-day-card";
+  dayCard.dataset.date = dateId;
+  dayCard.setAttribute("tabindex", "0");
+  dayCard.setAttribute("aria-label", `${formatDate(date, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric"
+  })}. Сделано: ${taskStats.done}. В работе: ${taskStats.inProgress}. Просрочено: ${taskStats.overdue}.`);
+
+  if (cellIndex % 7 >= 5) {
+    dayCard.classList.add("is-weekend");
+  }
+
+  if (dateId === todayId && isVisibleMonthDay) {
+    dayCard.classList.add("is-today");
+  }
+
+  if (dateId === state.selectedDate) {
+    dayCard.classList.add("is-selected");
+  }
+
+  if (!isVisibleMonthDay) {
+    dayCard.classList.add("is-outside-month");
+  }
+
+  dayCard.innerHTML = `
+    <span class="month-day-number">${date.getDate()}</span>
+    <span class="month-day-name">${formatDate(date, { month: "short" })}</span>
+    <span class="month-task-stats" aria-label="Статистика задач">
+      <span class="month-task-stat">
+        <span>Сделано</span>
+        <strong>${taskStats.done}</strong>
+      </span>
+      <span class="month-task-stat">
+        <span>В работе</span>
+        <strong>${taskStats.inProgress}</strong>
+      </span>
+      <span class="month-task-stat is-overdue">
+        <span>Просрочено</span>
+        <strong>${taskStats.overdue}</strong>
+      </span>
+    </span>
+  `;
+
+  return dayCard;
+}
+
+function renderMonthGrid() {
+  const monthGrid = document.querySelector("#monthGrid");
+
+  if (!monthGrid || !state.visibleMonthDate) {
+    return;
+  }
+
+  const monthStart = parseDateId(state.visibleMonthDate);
+  const monthDays = getMonthGridDays(monthStart);
+  const statsByDate = getTaskStatsMapByDate();
+
+  monthGrid.innerHTML = "";
+
+  monthDays.forEach((date, index) => {
+    monthGrid.append(createMonthDayCard(date, index, statsByDate));
+  });
+}
+
+function changeVisibleMonth(months) {
+  ensureVisibleMonthDate();
+  state.visibleMonthDate = toMonthStartId(addMonths(parseDateId(state.visibleMonthDate), months));
+  renderApp();
+}
+
+function goToPreviousMonth() {
+  changeVisibleMonth(-1);
+}
+
+function goToNextMonth() {
+  changeVisibleMonth(1);
+}
+
+function switchView(viewName) {
+  const allowedViews = ["month", "week", "tasks"];
+
+  if (!allowedViews.includes(viewName)) {
+    return;
+  }
+
+  state.activeView = viewName;
+
+  if (state.activeView === "month") {
+    syncVisibleMonthWithSelectedDate();
+  }
+
+  closeMoveCalendar();
+  renderApp();
 }
 
 function addTask(text) {
@@ -455,7 +722,6 @@ function addTask(text) {
   state.tasks.push(task);
   saveTasks();
   renderApp();
-  console.log("Weekly Task Planner state:", state);
 
   return true;
 }
@@ -471,7 +737,6 @@ function toggleTask(taskId) {
   task.updatedAt = new Date().toISOString();
   saveTasks();
   renderApp();
-  console.log("Weekly Task Planner state:", state);
 }
 
 function updateTaskText(taskId, nextText) {
@@ -490,7 +755,6 @@ function updateTaskText(taskId, nextText) {
   }
 
   renderApp();
-  console.log("Weekly Task Planner state:", state);
 }
 
 function finishTaskEditing(input, shouldSave) {
@@ -718,6 +982,7 @@ function moveTaskToDate(taskId, dateId) {
   if (task.date === dateId) {
     closeMoveCalendar();
     clearDraggedTaskState();
+    renderApp();
     return;
   }
 
@@ -727,7 +992,6 @@ function moveTaskToDate(taskId, dateId) {
   closeMoveCalendar();
   clearDraggedTaskState();
   renderApp();
-  console.log("Weekly Task Planner state:", state);
 }
 
 function copyTaskToDate(taskId, dateId) {
@@ -744,6 +1008,7 @@ function copyTaskToDate(taskId, dateId) {
 
   if (sameTaskAlreadyExists) {
     closeMoveCalendar();
+    renderApp();
     return;
   }
 
@@ -761,20 +1026,17 @@ function copyTaskToDate(taskId, dateId) {
   saveTasks();
   closeMoveCalendar();
   renderApp();
-  console.log("Weekly Task Planner state:", state);
 }
 
 function deleteTask(taskId) {
   state.tasks = state.tasks.filter((task) => task.id !== taskId);
   saveTasks();
   renderApp();
-  console.log("Weekly Task Planner state:", state);
 }
 
 function selectDate(dateId) {
   state.selectedDate = dateId;
   renderApp();
-  console.log("Weekly Task Planner state:", state);
 }
 
 function changeVisibleWeek(days) {
@@ -783,20 +1045,46 @@ function changeVisibleWeek(days) {
   state.visibleWeekStart = toDateId(nextWeekStart);
   state.selectedDate = state.visibleWeekStart;
   renderApp();
-  console.log("Weekly Task Planner state:", state);
 }
 
 function goToToday() {
-  initializeDates();
+  selectToday();
   renderApp();
-  console.log("Weekly Task Planner state:", state);
+}
+
+function selectToday() {
+  const today = new Date();
+
+  state.selectedDate = toDateId(today);
+  state.visibleWeekStart = toDateId(getWeekStart(today));
+  state.visibleMonthDate = toMonthStartId(today);
+}
+
+function goToCurrentMonth() {
+  selectToday();
+  renderApp();
+}
+
+function selectDayFromMonth(dateString) {
+  const selectedDate = parseDateId(dateString);
+
+  state.selectedDate = dateString;
+  state.visibleWeekStart = toDateId(getWeekStart(selectedDate));
+  state.activeView = "week";
+  closeMoveCalendar();
+  renderApp();
 }
 
 function bindEvents() {
   const taskForm = document.querySelector("#taskForm");
   const taskInput = document.querySelector("#taskInput");
   const tasksList = document.querySelector("#tasksList");
+  const viewSwitcher = document.querySelector(".view-switcher");
+  const monthGrid = document.querySelector("#monthGrid");
   const weekPanel = document.querySelector("#weekPanel");
+  const prevMonthButton = document.querySelector("#prevMonthButton");
+  const nextMonthButton = document.querySelector("#nextMonthButton");
+  const monthTodayButton = document.querySelector("#monthTodayButton");
   const prevWeekButton = document.querySelector("#prevWeek");
   const nextWeekButton = document.querySelector("#nextWeek");
   const todayButton = document.querySelector("#todayButton");
@@ -819,6 +1107,22 @@ function bindEvents() {
   });
 
   todayButton.addEventListener("click", goToToday);
+
+  prevMonthButton.addEventListener("click", goToPreviousMonth);
+
+  nextMonthButton.addEventListener("click", goToNextMonth);
+
+  monthTodayButton.addEventListener("click", goToCurrentMonth);
+
+  viewSwitcher.addEventListener("click", (event) => {
+    const viewButton = event.target.closest(".view-button");
+
+    if (!viewButton) {
+      return;
+    }
+
+    switchView(viewButton.dataset.view);
+  });
 
   weekPanel.addEventListener("click", (event) => {
     const dayCard = event.target.closest(".day-card");
@@ -843,6 +1147,31 @@ function bindEvents() {
 
     event.preventDefault();
     selectDate(dayCard.dataset.date);
+  });
+
+  monthGrid.addEventListener("click", (event) => {
+    const dayCard = event.target.closest(".month-day-card");
+
+    if (!dayCard) {
+      return;
+    }
+
+    selectDayFromMonth(dayCard.dataset.date);
+  });
+
+  monthGrid.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    const dayCard = event.target.closest(".month-day-card");
+
+    if (!dayCard) {
+      return;
+    }
+
+    event.preventDefault();
+    selectDayFromMonth(dayCard.dataset.date);
   });
 
   weekPanel.addEventListener("dragover", (event) => {
@@ -1014,8 +1343,6 @@ function init() {
   initializeDates();
   bindEvents();
   renderApp();
-
-  console.log("Weekly Task Planner state:", state);
 }
 
 init();
