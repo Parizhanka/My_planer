@@ -10,6 +10,7 @@ const state = {
 
 const moveCalendarState = {
   taskId: "",
+  mode: "move",
   visibleYear: 0,
   visibleMonth: 0
 };
@@ -303,6 +304,7 @@ function createTaskElement(task) {
   const taskText = document.createElement("p");
   const taskActions = document.createElement("div");
   const moveButton = document.createElement("button");
+  const copyButton = document.createElement("button");
   const deleteButton = document.createElement("button");
   const isOverdue = isTaskOverdue(task);
 
@@ -385,10 +387,24 @@ function createTaskElement(task) {
     </svg>
   `;
 
+  copyButton.className = "copy-task";
+  copyButton.type = "button";
+  copyButton.draggable = false;
+  copyButton.title = "Скопировать";
+  copyButton.setAttribute("aria-label", "Скопировать задачу на другую дату");
+  copyButton.innerHTML = `
+    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+      <path d="M8 8h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"></path>
+      <path d="M5 16H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path>
+      <path d="M11 14h4"></path>
+      <path d="M13 12v4"></path>
+    </svg>
+  `;
+
   deleteButton.draggable = false;
 
   taskActions.className = "task-actions";
-  taskActions.append(moveButton, deleteButton);
+  taskActions.append(moveButton, copyButton, deleteButton);
 
   taskCard.append(checkbox, taskContent, taskActions);
 
@@ -542,6 +558,7 @@ function closeMoveCalendar() {
   }
 
   moveCalendarState.taskId = "";
+  moveCalendarState.mode = "move";
 }
 
 function clearDropZoneHighlights() {
@@ -558,7 +575,7 @@ function clearDraggedTaskState() {
   clearDropZoneHighlights();
 }
 
-function openMoveCalendar(taskId) {
+function openMoveCalendar(taskId, mode = "move") {
   const task = state.tasks.find((item) => item.id === taskId);
 
   if (!task) {
@@ -569,9 +586,14 @@ function openMoveCalendar(taskId) {
 
   closeMoveCalendar();
   moveCalendarState.taskId = taskId;
+  moveCalendarState.mode = mode;
   moveCalendarState.visibleYear = taskDate.getFullYear();
   moveCalendarState.visibleMonth = taskDate.getMonth();
   renderMoveCalendar();
+}
+
+function openCopyCalendar(taskId) {
+  openMoveCalendar(taskId, "copy");
 }
 
 function changeMoveCalendarMonth(delta) {
@@ -640,7 +662,12 @@ function renderMoveCalendar() {
 
   calendar.className = "move-calendar";
   calendar.setAttribute("role", "dialog");
-  calendar.setAttribute("aria-label", "Календарь переноса задачи");
+  calendar.setAttribute(
+    "aria-label",
+    moveCalendarState.mode === "copy"
+      ? "Календарь копирования задачи"
+      : "Календарь переноса задачи"
+  );
 
   calendar.innerHTML = `
     <div class="calendar-header">
@@ -699,6 +726,40 @@ function moveTaskToDate(taskId, dateId) {
   saveTasks();
   closeMoveCalendar();
   clearDraggedTaskState();
+  renderApp();
+  console.log("Weekly Task Planner state:", state);
+}
+
+function copyTaskToDate(taskId, dateId) {
+  const task = state.tasks.find((item) => item.id === taskId);
+
+  if (!task) {
+    closeMoveCalendar();
+    return;
+  }
+
+  const sameTaskAlreadyExists = state.tasks.some((item) => {
+    return item.date === dateId && item.text === task.text;
+  });
+
+  if (sameTaskAlreadyExists) {
+    closeMoveCalendar();
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const taskCopy = {
+    id: createTaskId(),
+    text: task.text,
+    date: dateId,
+    isCompleted: false,
+    createdAt: now,
+    updatedAt: now
+  };
+
+  state.tasks.push(taskCopy);
+  saveTasks();
+  closeMoveCalendar();
   renderApp();
   console.log("Weekly Task Planner state:", state);
 }
@@ -843,6 +904,7 @@ function bindEvents() {
 
   tasksList.addEventListener("click", (event) => {
     const moveButton = event.target.closest(".move-task");
+    const copyButton = event.target.closest(".copy-task");
     const deleteButton = event.target.closest(".delete-task");
 
     if (moveButton) {
@@ -853,6 +915,17 @@ function bindEvents() {
       }
 
       openMoveCalendar(taskCard.dataset.taskId);
+      return;
+    }
+
+    if (copyButton) {
+      const taskCard = copyButton.closest(".task-card");
+
+      if (!taskCard) {
+        return;
+      }
+
+      openCopyCalendar(taskCard.dataset.taskId);
       return;
     }
 
@@ -917,13 +990,18 @@ function bindEvents() {
       }
 
       if (dayButton) {
+        if (moveCalendarState.mode === "copy") {
+          copyTaskToDate(moveCalendarState.taskId, dayButton.dataset.date);
+          return;
+        }
+
         moveTaskToDate(moveCalendarState.taskId, dayButton.dataset.date);
       }
 
       return;
     }
 
-    if (event.target.closest(".move-task")) {
+    if (event.target.closest(".move-task, .copy-task")) {
       return;
     }
 

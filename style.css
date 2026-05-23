@@ -407,6 +407,7 @@ button {
 }
 
 .move-task,
+.copy-task,
 .delete-task {
   width: 38px;
   height: 38px;
@@ -423,6 +424,7 @@ button {
 }
 
 .move-task svg,
+.copy-task svg,
 .delete-task svg {
   width: 19px;
   height: 19px;
@@ -434,13 +436,16 @@ button {
   pointer-events: none;
 }
 
-.move-task {
+.move-task,
+.copy-task {
   color: var(--color-text);
   background: #fffdf8;
 }
 
 .move-task:hover,
 .move-task:focus-visible,
+.copy-task:hover,
+.copy-task:focus-visible,
 .delete-task:hover,
 .delete-task:focus-visible {
   border-color: var(--color-accent);
